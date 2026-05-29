@@ -1,50 +1,41 @@
 from fastmcp import FastMCP
-import random
-import json
+import os 
+import sqlite3
 
-# Create the fasmsp server instance
-mcp = FastMCP("Simple Calculatoer server")
+DB_PATH = os.path.join(os.path.dirname(__file__), "expenses.db")
 
-@mcp.tool
-def add(a:int , b:int) -> int:
-    """ADD two numbers together.
-    args:
-        a: First number
-        b: second number
+mcp = FastMCP("expense-tracker")
 
-    Returns:
-        The sum of two number
-    """
+def init_db():
+    with sqlite3.connect(DB_PATH) as C:
+        C.execute("""
+            CREATE TABLE IF NOT EXISTS expenses(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                 amount REAL NOT NULL,
+                 category TEXT NOT NULL,
+                 subcategory TEXT DEFAULT '',
+                 note TEXT DEFAULT ''
+            )
+        """)
+init_db()
 
-    return a + b
+@mcp.tool()
+def add_expense(date, amount, category, subcategory="", note=""):
+    with sqlite3.connect(DB_PATH) as C:
+        cur = C.execute(
+            "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
+            (date, amount, category, subcategory, note)
+            )
+        
+        return {'status': "ok", "id":cur.lastrowid }
 
-
-# Generate random number
-@mcp.tool
-def random_number(min_value: int = 1, max_value: int = 100)-> int:
-    """Generate a random umber within a range 
-
-    args:
-        min_Value: minimum value (default: 1)
-        max_Value: maximum value (default: 100)
-
-    returns: 
-        A random integer between min_value and max_value
-    """
-    return random.randint(min_value, max_value)
-
-#Resource Server information
-@mcp.resource("info://server")
-def server_info()-> str:
-    """Get information about this server"""
-    info = {
-        "name": "Simple Calculator Server",
-        "version" : "1.0.0",
-        "description": "A basic MCP server with ath tools",
-        "tools": ["add", "random_number"],
-        "author": "your Name"
-    }
-    return json.dumps(info, indent=2)
+@mcp.tool()
+def list_expenses():
+    with sqlite3.connect(DB_PATH) as C:
+        cur = C.execute("SELECT id, date, amount, category, subcategory, note FROM expenses ORDER BY id ASC")
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 # Start Server
 
